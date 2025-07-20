@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Mumbai Hospitals Map</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
+
+  <style>
+    body { margin: 0; font-family: sans-serif; }
+    h1 { padding: 10px; background: #f4f4f4; }
+    #map { height: 90vh; width: 100%; }
+  </style>
+</head>
+<body>
+  <h1>Mumbai Hospitals (Clustered)</h1>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+  <script>
+    const map = L.map('map').setView([19.0760, 72.8777], 12);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    const markers = L.markerClusterGroup();
+    map.addLayer(markers);
+
+    function fetchHospitals() {
+      const bounds = map.getBounds();
+      const params = new URLSearchParams({
+        min_lat: bounds.getSouth(),
+        max_lat: bounds.getNorth(),
+        min_lon: bounds.getWest(),
+        max_lon: bounds.getEast()
+      });
+
+      fetch(`/api/hospitals?${params}`)
+        .then(res => res.json())
+        .then(data => {
+          markers.clearLayers();
+          data.forEach(h => {
+            if (h.lat && h.lon) {
+              const marker = L.marker([h.lat, h.lon]).bindPopup(`<strong>${h.name}</strong>`);
+              markers.addLayer(marker);
+            }
+          });
+        });
+    }
+
+    map.on('moveend', fetchHospitals);
+    fetchHospitals();  // initial load
+  </script>
+</body>
+</html>
