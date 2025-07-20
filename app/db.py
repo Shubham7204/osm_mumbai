@@ -10,5 +10,5 @@ def get_connection():
         user=os.getenv("DB_USER"),
         password=os.getenv("DB_PASS"),
         host=os.getenv("DB_HOST"),  # IPv4 address directly
-        port=os.getenv("DB_PORT")
+    port=int(os.getenv("DB_PORT"))  # Ensure it's an integer
     )
