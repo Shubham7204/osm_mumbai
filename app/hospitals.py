@@ -4,12 +4,11 @@ def get_hospitals_in_bounds(min_lat, max_lat, min_lon, max_lon):
     conn = get_connection()
     cur = conn.cursor()
     cur.execute("""
-        SELECT name, ST_X(ST_Transform(way, 4326)), ST_Y(ST_Transform(way, 4326))
-        FROM planet_osm_point 
-        WHERE amenity = 'hospital'
+        SELECT name, lon, lat
+        FROM hospitals
+        WHERE lat BETWEEN %s AND %s
+          AND lon BETWEEN %s AND %s
           AND name IS NOT NULL
-          AND ST_Y(ST_Transform(way, 4326)) BETWEEN %s AND %s
-          AND ST_X(ST_Transform(way, 4326)) BETWEEN %s AND %s
         LIMIT 500;
     """, (min_lat, max_lat, min_lon, max_lon))
     
