@@ -6,9 +6,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
-
   <style>
     body { margin: 0; font-family: sans-serif; }
     h1 { padding: 10px; background: #f4f4f4; }
@@ -19,7 +16,7 @@
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+
   <script>
     const map = L.map('map').setView([19.0760, 72.8777], 12);
 
@@ -27,8 +24,18 @@
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    const markers = L.markerClusterGroup();
+        const markers = L.layerGroup();
     map.addLayer(markers);
+
+    const smallIcon = L.icon({
+        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+        iconSize: [15, 25],
+        shadowSize: [25, 25],
+        iconAnchor: [8, 25],
+        shadowAnchor: [8, 25],
+        popupAnchor: [0, -25]
+    });
 
     
     function fetchHospitals() {
@@ -46,7 +53,7 @@
           markers.clearLayers();
           data.forEach(h => {
             if (h.lat && h.lon) {
-              const marker = L.marker([h.lat, h.lon]).bindPopup(`<strong>${h.name}</strong>`);
+              const marker = L.marker([h.lat, h.lon], {icon: smallIcon}).bindPopup(`<strong>${h.name}</strong>`);
               markers.addLayer(marker);
             }
           });

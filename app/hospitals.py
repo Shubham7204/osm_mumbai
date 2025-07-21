@@ -9,7 +9,7 @@ def get_hospitals_in_bounds(min_lat, max_lat, min_lon, max_lon):
         WHERE lat BETWEEN %s AND %s
           AND lon BETWEEN %s AND %s
           AND name IS NOT NULL
-        ORDER BY RANDOM() LIMIT 50;
+        LIMIT 50;
     """, (min_lat, max_lat, min_lon, max_lon))
     
     results = cur.fetchall()
