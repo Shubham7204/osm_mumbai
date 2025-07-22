@@ -1,24 +1,28 @@
 from fastapi import FastAPI, Request, Query
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from app.hospitals import get_hospitals_in_bounds
+
+# Import our NEW functions from the other file
+from app.hospitals import find_pois_in_radius_from_hospitals, generate_fake_crime_hotspots
 
 app = FastAPI()
-
-app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
+# This serves your main HTML page
 @app.get("/", response_class=HTMLResponse)
 def read_map(request: Request):
     return templates.TemplateResponse("map.html", {"request": request})
 
-@app.get("/api/hospitals")
-def hospitals(
-    min_lat: float = Query(...),
-    max_lat: float = Query(...),
-    min_lon: float = Query(...),
-    max_lon: float = Query(...)
-):
-    data = get_hospitals_in_bounds(min_lat, max_lat, min_lon, max_lon)
+# NEW API ENDPOINT 1: For finding POIs
+@app.get("/api/pois-in-radius")
+def pois_in_radius(lat: float, lon: float, radius_km: float):
+    # This calls the function that searches your hospitals table
+    data = find_pois_in_radius_from_hospitals(lat, lon, radius_km)
+    return JSONResponse(content=data)
+
+# NEW API ENDPOINT 2: For the crime heatmap
+@app.get("/api/crime-hotspots")
+def crime_hotspots():
+    # This calls the function that generates FAKE crime data
+    data = generate_fake_crime_hotspots()
     return JSONResponse(content=data)

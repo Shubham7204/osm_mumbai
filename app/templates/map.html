@@ -1,67 +1,203 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Mumbai Hospitals Map</title>
+  <title>Investigation Map Demo</title>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     body { margin: 0; font-family: sans-serif; }
-    h1 { padding: 10px; background: #f4f4f4; }
-    #map { height: 100vh; width: 100%; }
+    #map-container { position: absolute; left: 350px; top: 0; right: 0; bottom: 0; transition: left 0.3s ease; }
+    #map { height: 100%; width: 100%; }
+    #sidebar {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 350px;
+      height: 100vh;
+      background: #f8f9fa;
+      color: #333;
+      padding: 20px;
+      box-sizing: border-box;
+      overflow-y: auto;
+      z-index: 1000;
+      border-right: 1px solid #dee2e6;
+      transition: transform 0.3s ease;
+    }
+    #sidebar h2, #sidebar h3 { color: #2c3e50; border-bottom: 1px solid #dee2e6; padding-bottom: 10px; }
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #495057; }
+    .form-group input { width: 95%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; background-color: #fff; color: #495057; }
+    button { width: 100%; padding: 10px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-top: 10px; }
+    button:hover { background: #2980b9; }
+    button.secondary { background: #6c757d; }
+    button.secondary:hover { background: #5a6268; }
+    hr { border: 0; height: 1px; background: #dee2e6; margin: 25px 0; }
+    #sidebar-toggle {
+      position: absolute;
+      left: 360px;
+      top: 10px;
+      z-index: 1001;
+      width: 30px;
+      height: 30px;
+      background: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
   </style>
 </head>
+
 <body>
-  <div id="map"></div>
+  <div id="sidebar">
+    <h2>Investigation Controls</h2>
+
+    <h3>Key Locations</h3>
+    <div class="form-group">
+      <label for="home-coords">Home (Lat, Lon)</label>
+      <input type="text" id="home-coords" value="19.0760, 72.8777">
+    </div>
+    <div class="form-group">
+      <label for="missing-coords">Place of Missing (Lat, Lon)</label>
+      <input type="text" id="missing-coords" value="19.1177, 72.8631">
+    </div>
+    <div class="form-group">
+      <label for="police-coords">Nearest Police Station (Lat, Lon)</label>
+      <input type="text" id="police-coords" value="19.1197, 72.8722">
+    </div>
+    <button id="plot-points-btn">Plot Key Case Locations</button>
+    <hr>
+
+    <h3>Risk Analysis</h3>
+    <div class="form-group">
+      <label for="poi-radius">Search Radius for POIs (km)</label>
+      <input type="number" id="poi-radius" value="5">
+    </div>
+    <button id="find-pois-btn">Find POIs in Radius</button>
+    <hr>
+
+    <h3>Crime Data</h3>
+    <button id="toggle-hotspots-btn">Toggle Crime Hotspots</button>
+
+  </div>
+
+  <div id="sidebar-toggle">☰</div>
+  <div id="map-container">
+    <div id="map"></div>
+  </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 
   <script>
+    // Initialize the map with standard OpenStreetMap tiles
     const map = L.map('map').setView([19.0760, 72.8777], 12);
-
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
+      attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
-        const markers = L.layerGroup();
-    map.addLayer(markers);
+    // Layers to manage what's on the map
+    const keyLocationsLayer = L.layerGroup().addTo(map);
+    const poiLayer = L.layerGroup().addTo(map);
+    let heatLayer = null;
+    let searchCircle = null;
 
-    const smallIcon = L.icon({
-        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-        iconSize: [15, 25],
-        shadowSize: [25, 25],
-        iconAnchor: [8, 25],
-        shadowAnchor: [8, 25],
-        popupAnchor: [0, -25]
+    // --- ICONS ---
+    const homeIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+    const missingIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+    const policeIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+    const poiIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+    const predictiveIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+
+    // --- BUTTON ACTIONS ---
+
+    // 1. Plot Key Locations
+    document.getElementById('plot-points-btn').addEventListener('click', () => {
+      keyLocationsLayer.clearLayers();
+      const homeCoords = document.getElementById('home-coords').value.split(',').map(Number);
+      const missingCoords = document.getElementById('missing-coords').value.split(',').map(Number);
+      const policeCoords = document.getElementById('police-coords').value.split(',').map(Number);
+
+      if (homeCoords.length === 2) L.marker(homeCoords, { icon: homeIcon }).bindPopup('<strong>Home</strong>').addTo(keyLocationsLayer);
+      if (missingCoords.length === 2) L.marker(missingCoords, { icon: missingIcon }).bindPopup('<strong>Place of Missing</strong>').addTo(keyLocationsLayer);
+      if (policeCoords.length === 2) L.marker(policeCoords, { icon: policeIcon }).bindPopup('<strong>Police Station</strong>').addTo(keyLocationsLayer);
+
+      map.fitBounds(keyLocationsLayer.getBounds().pad(0.5));
     });
 
-    
-    function fetchHospitals() {
-      const bounds = map.getBounds();
-      const params = new URLSearchParams({
-        min_lat: bounds.getSouth(),
-        max_lat: bounds.getNorth(),
-        min_lon: bounds.getWest(),
-        max_lon: bounds.getEast()
-      });
+    // 2. Find "POIs" (which are actually hospitals) in a radius
+    document.getElementById('find-pois-btn').addEventListener('click', () => {
+      poiLayer.clearLayers();
+      if (searchCircle) map.removeLayer(searchCircle);
 
-      fetch(`/api/hospitals?${params}`)
+      const centerCoords = document.getElementById('missing-coords').value.split(',').map(Number);
+      const radiusKm = document.getElementById('poi-radius').value;
+      if (centerCoords.length !== 2) return alert('Missing Location is not valid.');
+
+      searchCircle = L.circle(centerCoords, { radius: radiusKm * 1000, color: 'yellow', fillOpacity: 0.1, weight: 1 }).addTo(map);
+      map.fitBounds(searchCircle.getBounds());
+
+      const params = new URLSearchParams({ lat: centerCoords[0], lon: centerCoords[1], radius_km: radiusKm });
+
+      fetch(`/api/pois-in-radius?${params}`)
         .then(res => res.json())
         .then(data => {
-          markers.clearLayers();
-          data.forEach(h => {
-            if (h.lat && h.lon) {
-              const marker = L.marker([h.lat, h.lon], {icon: smallIcon}).bindPopup(`<strong>${h.name}</strong>`);
-              markers.addLayer(marker);
-            }
+          data.forEach(poi => {
+            // Check if the POI was marked as "predictive" by the backend
+            const iconToUse = poi.is_predictive ? predictiveIcon : poiIcon;
+            const popupText = `<strong>${poi.name}</strong><br>(POI)` + (poi.is_predictive ? '<br><b>FLAGGED BY PREDICTIVE ANALYTICS</b>' : '');
+
+            L.marker([poi.lat, poi.lon], { icon: iconToUse }).bindPopup(popupText).addTo(poiLayer);
           });
         });
+    });
+
+    // 3. Toggle the Crime Hotspot Layer
+    document.getElementById('toggle-hotspots-btn').addEventListener('click', () => {
+      if (heatLayer) {
+        map.removeLayer(heatLayer);
+        heatLayer = null;
+      } else {
+        fetch('/api/crime-hotspots')
+          .then(res => res.json())
+          .then(heatPoints => {
+            heatLayer = L.heatLayer(heatPoints, {
+              radius: 20,
+              blur: 15,
+              maxZoom: 17,
+              gradient: { 0.4: 'blue', 0.65: 'lime', 1: 'red' }
+            }).addTo(map);
+          });
+      }
+    });
+
+    // Toggle sidebar functionality
+    const sidebar = document.getElementById('sidebar');
+    const mapContainer = document.getElementById('map-container');
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    let isSidebarOpen = true;
+
+    function toggleSidebar() {
+      isSidebarOpen = !isSidebarOpen;
+      if (isSidebarOpen) {
+        sidebar.style.transform = 'translateX(0)';
+        mapContainer.style.left = '350px';
+        sidebarToggle.style.left = '360px';
+        sidebarToggle.textContent = '☰';
+      } else {
+        sidebar.style.transform = 'translateX(-100%)';
+        mapContainer.style.left = '0';
+        sidebarToggle.style.left = '10px';
+        sidebarToggle.textContent = '☰';
+      }
     }
 
-    map.on('moveend', fetchHospitals);
-    fetchHospitals(); 
+    sidebarToggle.addEventListener('click', toggleSidebar);
   </script>
 </body>
 </html>
